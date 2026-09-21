@@ -40,7 +40,7 @@ exe = EXE(
     debug=False,
     strip=False,
     upx=False,
-    console=False,
+    console=True,
     version='version_info.txt',
 )
 
