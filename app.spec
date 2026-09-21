@@ -11,18 +11,12 @@
 # the user explicitly wants a single-file EXE instead and accepts the
 # tradeoff.
 
-from PyInstaller.utils.hooks import collect_data_files
-
-# CustomTkinter ships theme JSON files and fonts inside its package folder;
-# PyInstaller's static analysis doesn't see them, so collect them explicitly.
-ctk_datas = collect_data_files('customtkinter')
-
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
     # the docx skeleton (header/footer/logos/styles) read via resource_path()
-    datas=[('resources', 'resources')] + ctk_datas,
+    datas=[('resources', 'resources')],
     # bs4 picks its parser backend dynamically; soupsieve is its selector engine
     hiddenimports=['bs4', 'soupsieve'],
     hookspath=[],
@@ -40,7 +34,8 @@ exe = EXE(
     debug=False,
     strip=False,
     upx=False,
-    console=False,
+    console=False,          # windowed app: no black console window
+    icon='icon.ico',
     version='version_info.txt',
 )
 
