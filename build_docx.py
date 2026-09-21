@@ -28,8 +28,25 @@ from paths import resource_path
 DEFAULT_SKELETON = resource_path(os.path.join("resources", "skeleton"))
 
 
+# Characters that XML 1.0 forbids (control characters, lone surrogates, U+FFFE/U+FFFF).
+# One of these in the text makes document.xml not well-formed, and Word then refuses
+# to open the file at all ("we found a problem with its contents"). Text pasted from
+# Word or web pages into TestLink sometimes carries them (e.g. a vertical tab).
+_XML_INVALID = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
+
+
+def clean_text(s):
+    s = _XML_INVALID.sub(lambda m: " " if m.group(0) in "\x0b\x0c" else "", s or "")
+    return s
+
+
 def esc(s):
-    return xml_escape(s or "")
+    return xml_escape(clean_text(s))
+
+
+def esc_attr(s):
+    """Escape for use inside a double-quoted XML attribute value."""
+    return xml_escape(clean_text(s), {'"': "&quot;"})
 
 
 def generate_output_filename(data):
@@ -54,7 +71,7 @@ def generate_output_filename(data):
         filename = suite or "Test Specification"
 
     # Remove characters that Windows does not allow in filenames.
-    filename = re.sub(r'[<>:"/\\|?*]', '', filename)
+    filename = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', filename)
     filename = re.sub(r"\s+", " ", filename).strip(" .")
     return f"{filename}.docx"
 
@@ -92,7 +109,7 @@ def p_plain(text, rpr=RPR_18, page_break=False):
 def p_heading1(text, rpr, bookmark=None):
     bm = ""
     if bookmark:
-        bm = (f'<w:bookmarkStart w:id="{bookmark[1]}" w:name="{esc(bookmark[0])}"/>'
+        bm = (f'<w:bookmarkStart w:id="{bookmark[1]}" w:name="{esc_attr(bookmark[0])}"/>'
               f'<w:bookmarkEnd w:id="{bookmark[1]}"/>')
     return (f'<w:p><w:pPr><w:pStyle w:val="Heading1"/><w:ind w:hanging="0" w:start="0"/>{rpr}</w:pPr>'
             f'{bm}<w:r>{rpr}<w:t xml:space="preserve">{esc(text)}</w:t></w:r></w:p>')
@@ -101,15 +118,17 @@ def p_heading1(text, rpr, bookmark=None):
 def p_toc_entry(anchor, text, bold):
     rpr = RPR_18_BOLD if bold else RPR_18
     return (f'<w:p><w:pPr><w:pStyle w:val="NormalWeb"/>{rpr}</w:pPr>'
-            f'<w:hyperlink w:anchor="{esc(anchor)}">'
+            f'<w:hyperlink w:anchor="{esc_attr(anchor)}">'
             f'<w:r><w:rPr><w:rStyle w:val="Hyperlink"/><w:rFonts w:cs="Arial" w:ascii="Arial" w:hAnsi="Arial"/>'
             f'{"<w:b/><w:bCs/>" if bold else ""}<w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>'
             f'<w:t xml:space="preserve">{esc(text)}</w:t></w:r></w:hyperlink></w:p>')
 
 
 def p_bookmark_placeholder(anchor, bm_id):
+    if not (anchor or "").strip():
+        return p_spacer_normalweb()
     return (f'<w:p><w:pPr><w:pStyle w:val="NormalWeb"/>{RPR_18}</w:pPr>'
-            f'<w:bookmarkStart w:id="{bm_id}" w:name="{esc(anchor)}"/><w:bookmarkEnd w:id="{bm_id}"/>'
+            f'<w:bookmarkStart w:id="{bm_id}" w:name="{esc_attr(anchor)}"/><w:bookmarkEnd w:id="{bm_id}"/>'
             f'<w:r>{RPR_18}<w:t xml:space="preserve"> </w:t></w:r></w:p>')
 
 
@@ -208,7 +227,8 @@ def build_test_case_table(tc_data, widths):
             is_last = idx == len(lines) - 1
             spacing = ' w:before="0" w:after="280"' if is_last else ''
             if line.get("rtl"):
-                pPr = f'<w:pPr><w:pStyle w:val="NormalWeb"/><w:bidi w:val="1"/><w:ind w:end="0"/><w:jc w:val="end"/>{spacing and ("<w:spacing" + spacing + "/>") or ""}{RPR_17}</w:pPr>'
+                sp = ("<w:spacing" + spacing + "/>") if spacing else ""
+                pPr = f'<w:pPr><w:pStyle w:val="NormalWeb"/><w:bidi w:val="1"/>{sp}<w:ind w:end="0"/><w:jc w:val="end"/>{RPR_17}</w:pPr>'
             else:
                 pPr = f'<w:pPr><w:pStyle w:val="NormalWeb"/>{("<w:spacing" + spacing + "/>") if spacing else ""}{RPR_17}</w:pPr>'
             actions_paras.append(f'<w:p>{pPr}<w:r>{RPR_17}<w:t xml:space="preserve">{esc(line["text"])}</w:t></w:r></w:p>')
@@ -380,7 +400,7 @@ def build_docx_from_data(data, output_path, skeleton_dir=None):
 
         document_xml = build_body(data)
         os.makedirs(os.path.join(pkg_dir, "word"), exist_ok=True)
-        with open(os.path.join(pkg_dir, "word", "document.xml"), "w", encoding="utf-8") as f:
+        with open(os.path.join(pkg_dir, "word", "document.xml"), "w", encoding="utf-8", newline="") as f:
             f.write(document_xml)
 
         tmp_docx = os.path.join(work_dir, "out.docx")

@@ -123,3 +123,13 @@ If Windows SmartScreen shows "Windows protected your PC", click "More info"
 -> "Run anyway".
 
 To use your own icon, replace icon.ico (a multi-size .ico file) and rebuild.
+
+IF WORD SAYS IT "CAN'T OPEN" THE CONVERTED FILE
+-----------------------------------------------
+Version 1.0.1 fixes the known causes: control characters pasted into TestLink
+text (for example from Word) and right-to-left lines (Arabic or parameter
+lists) at the end of a step cell. If a file still won't open:
+  1. In the Word error box click "Details >>>" and note the "Location" line
+     (part name, line and column).
+  2. Keep the original TestLink export that produced it - with that file the
+     problem can be reproduced and fixed quickly.
