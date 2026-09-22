@@ -82,7 +82,13 @@ IF THE TEMPLATE CHANGES
 -----------------------
 The WE header, footer, logos and styles live in  resources\skeleton\.
 If the branding is ever updated, replace those files (from a new reference
-.docx, leaving word\document.xml out) and rebuild.
+.docx, leaving word\document.xml out), then run  python make_manifest.py  to
+refresh resources\skeleton_manifest.json, and rebuild.
+
+Two special parts are stored under plain names so browsers and GitHub uploads
+cannot lose them: Content_Types.xml (really "[Content_Types].xml") and
+_rels\rels_root.xml (really "_rels\.rels"). The app restores the real names
+inside every generated Word file. Do not rename them back.
 
 
 ABOUT ANTIVIRUS WARNINGS
@@ -126,10 +132,21 @@ To use your own icon, replace icon.ico (a multi-size .ico file) and rebuild.
 
 IF WORD SAYS IT "CAN'T OPEN" THE CONVERTED FILE
 -----------------------------------------------
-Version 1.0.1 fixes the known causes: control characters pasted into TestLink
-text (for example from Word) and right-to-left lines (Arabic or parameter
-lists) at the end of a step cell. If a file still won't open:
+Since version 1.0.2 the app checks the template files before it builds, and
+checks the finished Word file afterwards (structure, XML, links between parts).
+If anything is wrong it shows a clear message instead of giving you a broken
+file - please send that message to whoever maintains this tool.
+
+If a file still won't open in Word:
   1. In the Word error box click "Details >>>" and note the "Location" line
      (part name, line and column).
-  2. Keep the original TestLink export that produced it - with that file the
-     problem can be reproduced and fixed quickly.
+  2. Keep the original TestLink export that produced it and the .docx itself -
+     with those the problem can be reproduced and fixed quickly.
+  3. Check the app version: right-click TestLinkWEFormatter.exe -> Properties ->
+     Details -> File version should be 1.0.2.0 or newer.
+
+Fixed in 1.0.1: control characters pasted into TestLink text, right-to-left
+lines at the end of a step cell.
+Fixed in 1.0.2: a template file missing from the GitHub upload (files whose
+names start with a dot are often skipped) silently produced a Word file that
+Word reports as having "a problem with its contents".

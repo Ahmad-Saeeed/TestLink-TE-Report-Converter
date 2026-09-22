@@ -16,6 +16,7 @@ import sys
 import os
 import json
 import shutil
+import hashlib
 import tempfile
 import zipfile
 import re
@@ -38,6 +39,82 @@ _XML_INVALID = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]
 def clean_text(s):
     s = _XML_INVALID.sub(lambda m: " " if m.group(0) in "\x0b\x0c" else "", s or "")
     return s
+
+
+class TemplateError(Exception):
+    """The bundled Word template is incomplete or has been changed."""
+
+
+# Names under which two special DOCX parts are stored inside resources/skeleton
+# (their real names start with '[' or '.', which browsers, ZIP tools and GitHub
+# uploads often mangle or silently skip). They are restored inside the generated file.
+_RESTORE_NAMES = {
+    "Content_Types.xml": "[Content_Types].xml",
+    "_rels/rels_root.xml": "_rels/.rels",
+}
+
+
+def _sha256(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def prepare_package(skeleton_dir, pkg_dir):
+    """Copy the template into pkg_dir, checking it against skeleton_manifest.json.
+
+    * a missing file  -> TemplateError (never silently build a broken document)
+    * a file whose only difference is CRLF line endings (Git on Windows can add these
+      when it checks the repo out) is repaired automatically
+    * any other change -> TemplateError
+    """
+    manifest_path = os.path.join(os.path.dirname(os.path.abspath(skeleton_dir)), "skeleton_manifest.json")
+    if not os.path.isfile(manifest_path):
+        raise TemplateError("The template checklist (skeleton_manifest.json) is missing from the app's resources folder.")
+    with open(manifest_path, encoding="utf-8") as f:
+        expected = json.load(f)["files"]
+
+    missing, changed = [], []
+    for rel, want in expected.items():
+        src = os.path.join(skeleton_dir, *rel.split("/"))
+        if not os.path.isfile(src):
+            missing.append(rel)
+            continue
+        with open(src, "rb") as f:
+            data = f.read()
+        if _sha256(data) != want:
+            repaired = data.replace(b"\r\n", b"\n")
+            if _sha256(repaired) == want:
+                data = repaired
+            else:
+                changed.append(rel)
+                continue
+        dst_rel = _RESTORE_NAMES.get(rel, rel)
+        dst = os.path.join(pkg_dir, *dst_rel.split("/"))
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        with open(dst, "wb") as f:
+            f.write(data)
+
+    if missing or changed:
+        lines = ["The bundled Word template is incomplete or damaged, so no document was created."]
+        if missing:
+            lines.append("Missing: " + ", ".join(missing))
+        if changed:
+            lines.append("Changed: " + ", ".join(changed))
+        lines.append("This usually means some files did not upload to GitHub. Upload the whole "
+                     "'resources' folder again, then rebuild the app.")
+        raise TemplateError("\n".join(lines))
+
+
+_BM_BAD = re.compile(r"[^A-Za-z0-9_]")
+
+
+def bm_name(name):
+    """Make a bookmark name Word accepts: letters/digits/underscore, starts with a
+    letter or underscore, at most 40 characters. Normal TestLink anchors such as
+    'toc_tc123' pass through unchanged."""
+    n = _BM_BAD.sub("_", (name or "").strip())
+    if n and not (n[0].isalpha() or n[0] == "_"):
+        n = "_" + n
+    return n[:40]
 
 
 def esc(s):
@@ -109,7 +186,7 @@ def p_plain(text, rpr=RPR_18, page_break=False):
 def p_heading1(text, rpr, bookmark=None):
     bm = ""
     if bookmark:
-        bm = (f'<w:bookmarkStart w:id="{bookmark[1]}" w:name="{esc_attr(bookmark[0])}"/>'
+        bm = (f'<w:bookmarkStart w:id="{bookmark[1]}" w:name="{esc_attr(bm_name(bookmark[0]))}"/>'
               f'<w:bookmarkEnd w:id="{bookmark[1]}"/>')
     return (f'<w:p><w:pPr><w:pStyle w:val="Heading1"/><w:ind w:hanging="0" w:start="0"/>{rpr}</w:pPr>'
             f'{bm}<w:r>{rpr}<w:t xml:space="preserve">{esc(text)}</w:t></w:r></w:p>')
@@ -117,6 +194,10 @@ def p_heading1(text, rpr, bookmark=None):
 
 def p_toc_entry(anchor, text, bold):
     rpr = RPR_18_BOLD if bold else RPR_18
+    anchor = bm_name(anchor)
+    if not anchor:  # no usable link target: keep the text, skip the hyperlink
+        return (f'<w:p><w:pPr><w:pStyle w:val="NormalWeb"/>{rpr}</w:pPr>'
+                f'<w:r>{rpr}<w:t xml:space="preserve">{esc(text)}</w:t></w:r></w:p>')
     return (f'<w:p><w:pPr><w:pStyle w:val="NormalWeb"/>{rpr}</w:pPr>'
             f'<w:hyperlink w:anchor="{esc_attr(anchor)}">'
             f'<w:r><w:rPr><w:rStyle w:val="Hyperlink"/><w:rFonts w:cs="Arial" w:ascii="Arial" w:hAnsi="Arial"/>'
@@ -125,7 +206,8 @@ def p_toc_entry(anchor, text, bold):
 
 
 def p_bookmark_placeholder(anchor, bm_id):
-    if not (anchor or "").strip():
+    anchor = bm_name(anchor)
+    if not anchor:
         return p_spacer_normalweb()
     return (f'<w:p><w:pPr><w:pStyle w:val="NormalWeb"/>{RPR_18}</w:pPr>'
             f'<w:bookmarkStart w:id="{bm_id}" w:name="{esc_attr(anchor)}"/><w:bookmarkEnd w:id="{bm_id}"/>'
@@ -383,20 +465,14 @@ def build_docx_from_data(data, output_path, skeleton_dir=None):
     """
     skeleton_dir = skeleton_dir or DEFAULT_SKELETON
     if not os.path.isdir(skeleton_dir):
-        raise FileNotFoundError(f"Bundled template folder is missing: {skeleton_dir}")
+        raise TemplateError(f"The bundled Word template folder is missing: {skeleton_dir}")
 
     work_dir = tempfile.mkdtemp(prefix="testlink_we_")
     try:
         pkg_dir = os.path.join(work_dir, "pkg")
-        shutil.copytree(skeleton_dir, pkg_dir)
-
-        # The skeleton stores the DOCX package's special [Content_Types].xml as
-        # Content_Types.xml (square brackets upset some ZIP/upload tools).
-        # Restore the required DOCX filename only inside the generated archive.
-        packaged_ct = os.path.join(pkg_dir, "Content_Types.xml")
+        os.makedirs(pkg_dir)
+        prepare_package(skeleton_dir, pkg_dir)   # checks + copies, restores special names
         docx_ct = os.path.join(pkg_dir, "[Content_Types].xml")
-        if os.path.exists(packaged_ct) and not os.path.exists(docx_ct):
-            os.replace(packaged_ct, docx_ct)
 
         document_xml = build_body(data)
         os.makedirs(os.path.join(pkg_dir, "word"), exist_ok=True)
@@ -410,10 +486,10 @@ def build_docx_from_data(data, output_path, skeleton_dir=None):
             for root, _, files in os.walk(pkg_dir):
                 for name in sorted(files):
                     full = os.path.join(root, name)
-                    rel = os.path.relpath(full, pkg_dir)
+                    rel = os.path.relpath(full, pkg_dir).replace(os.sep, "/")
                     if rel == "[Content_Types].xml":
                         continue
-                    zf.write(full, rel)
+                    zf.write(full, rel)   # ZIP entry names always use '/' 
 
         if os.path.exists(output_path):
             os.remove(output_path)  # PermissionError here => file open in Word

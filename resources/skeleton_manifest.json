@@ -1,0 +1,21 @@
+{
+ "files": {
+  "Content_Types.xml": "d4b37da69cfae3844499ff2a09cdef26f7cf631994cfa9d346889b46ffec1be2",
+  "_rels/rels_root.xml": "0e0f3b82b9dc5912a18fa6fd8cd8d6412bf758fc6c2b049b390baf25269c94a7",
+  "docProps/app.xml": "9aee359a65c3af1745ecec2c43c7bfcecbf55f910230f8bc4a41737be37b39a5",
+  "docProps/core.xml": "aff2481d7d7795308ea77fb27d71718fb2721b59bd4eb882de8f597a465220d6",
+  "docProps/custom.xml": "2e013da1ade03275bd9389897bf8cd005f6b8f303b7b019c57e9caf5a553b27c",
+  "word/_rels/document.xml.rels": "9cadb8498f97ff8c929dcc912295d6a37f532339d1d5b94ccea1fe4d31d6fc7b",
+  "word/_rels/footer1.xml.rels": "75d4d4b88904488a31705ad5fb9086b302d0368a73619343b41a4771651160ea",
+  "word/_rels/header1.xml.rels": "b1c164ff1c782c1d2d7e5b8b71b3790ac3ec6783635ff9d7b193d002bf20a13f",
+  "word/fontTable.xml": "52708c3c8478051384d5e7c4c3e9364d982c70cccf85a611c650adb825125992",
+  "word/footer1.xml": "28fb45a8697b9e605f67c5b9680224f71d1c69c95d057dccd19ed35fc0f2dce9",
+  "word/header1.xml": "ca1393e1cb0779b92211c0c9a911ceb16e9e0b0464d5f926bd1e2bd81d4c0717",
+  "word/media/image1.png": "3c878df53a63aeee53c1f97e6c434b38b84a652725e0b573e5deebed0f0b9b11",
+  "word/media/image2.png": "4999857656d14a8ac2e9fde36578d7f1cfeba9adbf371313075969296bd88dc8",
+  "word/numbering.xml": "f03ce7eb7d9523ca232f41df0d9b76d1a08e55fbbaf6578cd1158f3c9c07954d",
+  "word/settings.xml": "238b392a521f6359b8adb8fb334dc20ae68f135637b1326cf2e069e86a3de3d8",
+  "word/styles.xml": "08c8ca692ed08c06b65cb25f6ba342def16c9ae859c108a03a438357ee1bfe56",
+  "word/theme/theme1.xml": "cecdf4f21275f87c79187622b39191d29095638711bd3fe1b92624c6d5c8c070"
+ }
+}

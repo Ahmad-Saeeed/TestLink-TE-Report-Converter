@@ -8,9 +8,12 @@ Pipeline (same as the original skill):
     2. build_docx.build_docx_from_data()   dict -> WE-branded .docx
 """
 import os
+import posixpath
+import xml.etree.ElementTree as ET
+import zipfile
 
 from parse_source import parse
-from build_docx import build_docx_from_data, generate_output_filename
+from build_docx import build_docx_from_data, generate_output_filename, TemplateError
 
 OLE_MAGIC = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"  # real (binary) Word .doc files
 
@@ -44,6 +47,58 @@ def _check_source(path):
             "This file doesn't look like a TestLink Test Specification export "
             "(it isn't an HTML document)."
         )
+
+
+def _verify_docx(path):
+    """Self-check of the finished .docx, so a file Word can't open is never handed over.
+
+    Checks the package the way Word does at load time: required parts exist, every XML
+    part is well-formed, every internal relationship points at a real part, and every
+    part has a content type. Returns a list of problems (empty = fine).
+    """
+    problems = []
+    try:
+        zf = zipfile.ZipFile(path)
+    except zipfile.BadZipFile:
+        return ["the file is not a valid ZIP package"]
+    names = set(zf.namelist())
+
+    for req in ("[Content_Types].xml", "_rels/.rels", "word/document.xml"):
+        if req not in names:
+            problems.append(f"required part missing: {req}")
+
+    for n in sorted(names):
+        if n.endswith((".xml", ".rels")):
+            try:
+                ET.fromstring(zf.read(n))
+            except ET.ParseError as e:
+                problems.append(f"{n} is not well-formed XML ({e})")
+
+    if problems:
+        return problems
+
+    for n in sorted(names):
+        if not n.endswith(".rels"):
+            continue
+        base = posixpath.dirname(posixpath.dirname(n))  # folder of the part the rels belong to
+        for rel in ET.fromstring(zf.read(n)):
+            if rel.get("TargetMode") == "External":
+                continue
+            target = rel.get("Target", "")
+            resolved = target[1:] if target.startswith("/") else posixpath.normpath(posixpath.join(base, target))
+            if resolved not in names:
+                problems.append(f"{n} points to a missing part: {resolved}")
+
+    ct = ET.fromstring(zf.read("[Content_Types].xml"))
+    defaults = {e.get("Extension", "").lower() for e in ct if e.tag.endswith("Default")}
+    overrides = {e.get("PartName", "") for e in ct if e.tag.endswith("Override")}
+    for n in names:
+        if n == "[Content_Types].xml":
+            continue
+        ext = n.rsplit(".", 1)[-1].lower() if "." in n else ""
+        if ext not in defaults and "/" + n not in overrides:
+            problems.append(f"no content type declared for: {n}")
+    return problems
 
 
 def run_conversion(source_path, output_dir=None, log=_noop):
@@ -80,10 +135,25 @@ def run_conversion(source_path, output_dir=None, log=_noop):
     log("Building the WE / TelecomEgypt Word document ...")
     try:
         build_docx_from_data(data, out_path)
+    except TemplateError as e:
+        raise ConversionError(str(e))
     except PermissionError:
         raise ConversionError(
             f"Couldn't write:\n{out_path}\n\n"
             "If that file is open in Word, close it and try again."
+        )
+
+    log("Checking the finished file ...")
+    problems = _verify_docx(out_path)
+    if problems:
+        try:
+            os.remove(out_path)
+        except OSError:
+            pass
+        raise ConversionError(
+            "The Word file failed its self-check, so it was not kept.\n\n- "
+            + "\n- ".join(problems[:6])
+            + "\n\nPlease send this message to whoever maintains this tool."
         )
 
     log(f"Done. Saved to {out_path}")
