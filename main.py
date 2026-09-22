@@ -85,6 +85,9 @@ class App(tk.Tk):
         self.progress = ttk.Progressbar(outer, mode="indeterminate")
         self.progress.grid(row=6, column=0, sticky="ew", pady=(10, 0))
 
+        ttk.Label(self, text="\u00a9 Ahmed Saeed", foreground="#999999",
+                 font=("Segoe UI", 8)).place(relx=1.0, rely=1.0, anchor="se", x=-8, y=-4)
+
         self._log_line("Pick a TestLink export to get started.")
 
     def _path_row(self, parent, row, label, variable, command):
