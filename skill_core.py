@@ -102,12 +102,18 @@ def _verify_docx(path):
 
 
 def _normalize_with_word(path, log=_noop):
-    """Ask Microsoft Word to open and re-save the .docx so the package becomes
-    a native Word file. Many enterprise upload systems only accept packages
-    that Word itself has written.
+    """Force Microsoft Word to fully rebuild the .docx package.
 
-    Returns True if Word successfully rewrote the file, False if Word is not
-    available or the step failed (the original file is left unchanged).
+    A plain SaveAs2 on the same file is not enough: Word keeps our skeleton
+    styles/theme/settings. Enterprise upload systems still reject that.
+
+    What works (and matches the manual workaround of pasting into a blank
+    document) is a round-trip through the binary .doc format:
+        .docx  →  open in Word  →  save as .doc  →  open  →  save as .docx
+    That makes Word expand styles, theme, settings and rewrite every part
+    in its native layout.
+
+    Returns True on success, False if Word is unavailable (original file kept).
     """
     try:
         import win32com.client  # type: ignore
@@ -116,22 +122,38 @@ def _normalize_with_word(path, log=_noop):
         log("Microsoft Word automation not available (pywin32 missing). Skipping native re-save.")
         return False
 
+    # Word FileFormat constants
+    wdFormatDocument = 0          # binary .doc
+    wdFormatXMLDocument = 16      # .docx
+
     word = None
     doc = None
+    tmp_doc = None
+    abs_path = os.path.abspath(path)
+    tmp_path = abs_path + ".tmp.doc"
+    tmp_docx = abs_path + ".tmp.docx"
+
     try:
         pythoncom.CoInitialize()
         word = win32com.client.DispatchEx("Word.Application")
         word.Visible = False
         word.DisplayAlerts = 0  # wdAlertsNone
 
-        abs_path = os.path.abspath(path)
-        # Open and immediately SaveAs as .docx (FileFormat 16 = wdFormatXMLDocument).
-        # This forces Word to rewrite the entire OOXML package in its native layout.
+        # Step 1: open our generated .docx and save as binary .doc
         doc = word.Documents.Open(abs_path, ReadOnly=False, AddToRecentFiles=False)
-        doc.SaveAs2(abs_path, FileFormat=16)
+        doc.SaveAs2(tmp_path, FileFormat=wdFormatDocument)
         doc.Close(SaveChanges=False)
         doc = None
-        log("Re-saved with Microsoft Word so the file is accepted by strict upload systems.")
+
+        # Step 2: open the .doc and save back as a fresh .docx
+        doc = word.Documents.Open(tmp_path, ReadOnly=False, AddToRecentFiles=False)
+        doc.SaveAs2(tmp_docx, FileFormat=wdFormatXMLDocument)
+        doc.Close(SaveChanges=False)
+        doc = None
+
+        # Replace the original with the fully rewritten package
+        os.replace(tmp_docx, abs_path)
+        log("Re-saved with Microsoft Word (full rebuild) so the file is accepted by strict upload systems.")
         return True
     except Exception as e:
         log(f"Could not re-save with Microsoft Word ({e}). The generated file is still usable in Word.")
@@ -151,6 +173,12 @@ def _normalize_with_word(path, log=_noop):
             pythoncom.CoUninitialize()
         except Exception:
             pass
+        for p in (tmp_path, tmp_docx):
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except OSError:
+                pass
 
 
 def run_conversion(source_path, output_dir=None, log=_noop):
