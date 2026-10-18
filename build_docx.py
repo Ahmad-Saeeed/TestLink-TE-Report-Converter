@@ -20,6 +20,7 @@ import hashlib
 import tempfile
 import zipfile
 import re
+from datetime import datetime, timezone
 from xml.sax.saxutils import escape as xml_escape
 
 from paths import resource_path
@@ -27,18 +28,6 @@ from paths import resource_path
 # Bundled docx skeleton (header/footer/logos/styles). Resolved via
 # resource_path() so it works both as a plain script and inside the frozen EXE.
 DEFAULT_SKELETON = resource_path(os.path.join("resources", "skeleton"))
-
-
-# Characters that XML 1.0 forbids (control characters, lone surrogates, U+FFFE/U+FFFF).
-# One of these in the text makes document.xml not well-formed, and Word then refuses
-# to open the file at all ("we found a problem with its contents"). Text pasted from
-# Word or web pages into TestLink sometimes carries them (e.g. a vertical tab).
-_XML_INVALID = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
-
-
-def clean_text(s):
-    s = _XML_INVALID.sub(lambda m: " " if m.group(0) in "\x0b\x0c" else "", s or "")
-    return s
 
 
 class TemplateError(Exception):
@@ -104,6 +93,27 @@ def prepare_package(skeleton_dir, pkg_dir):
         raise TemplateError("\n".join(lines))
 
 
+# Characters that XML 1.0 forbids (control characters, lone surrogates, U+FFFE/U+FFFF).
+# One of these in the text makes document.xml not well-formed, and Word then refuses
+# to open the file at all ("we found a problem with its contents"). Text pasted from
+# Word or web pages into TestLink sometimes carries them (e.g. a vertical tab).
+_XML_INVALID = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
+
+
+def clean_text(s):
+    s = _XML_INVALID.sub(lambda m: " " if m.group(0) in "\x0b\x0c" else "", s or "")
+    return s
+
+
+def esc(s):
+    return xml_escape(clean_text(s))
+
+
+def esc_attr(s):
+    """Escape for use inside a double-quoted XML attribute value."""
+    return xml_escape(clean_text(s), {'"': "&quot;"})
+
+
 _BM_BAD = re.compile(r"[^A-Za-z0-9_]")
 
 
@@ -115,15 +125,6 @@ def bm_name(name):
     if n and not (n[0].isalpha() or n[0] == "_"):
         n = "_" + n
     return n[:40]
-
-
-def esc(s):
-    return xml_escape(clean_text(s))
-
-
-def esc_attr(s):
-    """Escape for use inside a double-quoted XML attribute value."""
-    return xml_escape(clean_text(s), {'"': "&quot;"})
 
 
 def generate_output_filename(data):
@@ -147,7 +148,8 @@ def generate_output_filename(data):
     else:
         filename = suite or "Test Specification"
 
-    # Remove characters that Windows does not allow in filenames.
+    # Remove characters that Windows does not allow in filenames (plus control
+    # characters, which can end up here if the TestLink Test Suite name carries one).
     filename = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', filename)
     filename = re.sub(r"\s+", " ", filename).strip(" .")
     return f"{filename}.docx"
@@ -456,6 +458,27 @@ def build_body(data):
     return document_xml
 
 
+def _stamp_core_xml(pkg_dir):
+    """The template's docProps/core.xml carries a fixed created/modified timestamp
+    (the date the WE template itself was last touched). Stamp it with the actual
+    build time instead, so every generated report doesn't claim to have been
+    created on the same day the template was made."""
+    core_path = os.path.join(pkg_dir, "docProps", "core.xml")
+    if not os.path.exists(core_path):
+        return
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(core_path, encoding="utf-8") as f:
+        core_xml = f.read()
+    core_xml = re.sub(
+        r'(<dcterms:created xsi:type="dcterms:W3CDTF">)[^<]*(</dcterms:created>)',
+        rf"\g<1>{now}\g<2>", core_xml, count=1)
+    core_xml = re.sub(
+        r'(<dcterms:modified xsi:type="dcterms:W3CDTF">)[^<]*(</dcterms:modified>)',
+        rf"\g<1>{now}\g<2>", core_xml, count=1)
+    with open(core_path, "w", encoding="utf-8", newline="") as f:
+        f.write(core_xml)
+
+
 def build_docx_from_data(data, output_path, skeleton_dir=None):
     """Build the branded .docx from an already-parsed dict (see parse_source.parse).
 
@@ -479,6 +502,8 @@ def build_docx_from_data(data, output_path, skeleton_dir=None):
         with open(os.path.join(pkg_dir, "word", "document.xml"), "w", encoding="utf-8", newline="") as f:
             f.write(document_xml)
 
+        _stamp_core_xml(pkg_dir)
+
         tmp_docx = os.path.join(work_dir, "out.docx")
         with zipfile.ZipFile(tmp_docx, "w", zipfile.ZIP_DEFLATED) as zf:
             # [Content_Types].xml first, as Word expects.
@@ -489,7 +514,7 @@ def build_docx_from_data(data, output_path, skeleton_dir=None):
                     rel = os.path.relpath(full, pkg_dir).replace(os.sep, "/")
                     if rel == "[Content_Types].xml":
                         continue
-                    zf.write(full, rel)   # ZIP entry names always use '/' 
+                    zf.write(full, rel)   # ZIP entry names always use '/'
 
         if os.path.exists(output_path):
             os.remove(output_path)  # PermissionError here => file open in Word

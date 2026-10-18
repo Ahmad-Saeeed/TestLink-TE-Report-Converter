@@ -1,26 +1,15 @@
 # UTF-8
-#
-# Windows version-info resource template. Copy this into the new project as
-# version_info.txt and fill in the six placeholders below for the specific
-# skill being wrapped, then reference it from app.spec with
-# version='version_info.txt' on the EXE(...) call.
-#
-# Why this file exists at all: a blank/missing Windows version resource is
-# itself one of the weak signals antivirus heuristics use to flag PyInstaller
-# output, alongside UPX compression and onefile's overlay data. Filling this
-# in is one of three defaults this skill always applies — see
-# references/pyinstaller-guide.md "Antivirus false positives".
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 3, 0),
-    prodvers=(1, 0, 3, 0),
+    filevers=(1, 0, 4, 0),
+    prodvers=(1, 0, 4, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
     fileType=0x1,
     subtype=0x0,
     date=(0, 0)
-  ),
+    ),
   kids=[
     StringFileInfo(
       [
@@ -28,12 +17,11 @@ VSVersionInfo(
         u'040904B0',
         [StringStruct(u'CompanyName', u'WE / Telecom Egypt'),
         StringStruct(u'FileDescription', u'Converts TestLink test specification exports into WE-branded Word documents'),
-        StringStruct(u'FileVersion', u'1.0.3.0'),
+        StringStruct(u'FileVersion', u'1.0.4.0'),
         StringStruct(u'InternalName', u'TestLinkWEFormatter'),
-        StringStruct(u'LegalCopyright', u'Internal use'),
         StringStruct(u'OriginalFilename', u'TestLinkWEFormatter.exe'),
         StringStruct(u'ProductName', u'TestLink to WE Formatter'),
-        StringStruct(u'ProductVersion', u'1.0.3.0')])
+        StringStruct(u'ProductVersion', u'1.0.4.0')])
       ]),
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
   ]
