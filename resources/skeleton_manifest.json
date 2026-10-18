@@ -1,11 +1,10 @@
 {
  "files": {
-  "Content_Types.xml": "77a04df8989fd025835584e67a53fc489b7807af58e9d63248e54303b8fa437b",
-  "_rels/rels_root.xml": "0e0f3b82b9dc5912a18fa6fd8cd8d6412bf758fc6c2b049b390baf25269c94a7",
-  "docProps/app.xml": "61b8e95ee561c19e936079831c7e3ce70665b84e787669de79c8b586c37278c8",
+  "Content_Types.xml": "eb6c8e84f048810c8bb17ab1d8cb68930de6fb6901ac0ed183391e8540fd96f9",
+  "_rels/rels_root.xml": "f86f1893aecb510b25f41025ced61dd4a921d4188a6056e2f3fb17af8545e8e6",
+  "docProps/app.xml": "c8d0856591351b98b1630431de241c4fa7118da3adac5da0b2be991d130f6ba4",
   "docProps/core.xml": "36eadbffb2cb7df1c3f80e2d439b17832fea7dd55974a3aa84f52d490113393f",
-  "docProps/custom.xml": "49e959a914ba39d3f8717d3165c2ec7ecb7dde546ee9bfce7f5436fe2ec93e52",
-  "word/_rels/document.xml.rels": "9cadb8498f97ff8c929dcc912295d6a37f532339d1d5b94ccea1fe4d31d6fc7b",
+  "word/_rels/document.xml.rels": "3f2528a5ccdcb88312db85e9ee62e6e4a1f62cbeff624fd3df3e4517438fff20",
   "word/_rels/footer1.xml.rels": "75d4d4b88904488a31705ad5fb9086b302d0368a73619343b41a4771651160ea",
   "word/_rels/header1.xml.rels": "b1c164ff1c782c1d2d7e5b8b71b3790ac3ec6783635ff9d7b193d002bf20a13f",
   "word/fontTable.xml": "52708c3c8478051384d5e7c4c3e9364d982c70cccf85a611c650adb825125992",
@@ -14,8 +13,9 @@
   "word/media/image1.png": "3c878df53a63aeee53c1f97e6c434b38b84a652725e0b573e5deebed0f0b9b11",
   "word/media/image2.png": "4999857656d14a8ac2e9fde36578d7f1cfeba9adbf371313075969296bd88dc8",
   "word/numbering.xml": "f03ce7eb7d9523ca232f41df0d9b76d1a08e55fbbaf6578cd1158f3c9c07954d",
-  "word/settings.xml": "238b392a521f6359b8adb8fb334dc20ae68f135637b1326cf2e069e86a3de3d8",
+  "word/settings.xml": "d9b0a52cb804eb7ef48991440c556b36c44f6fe9bd40f2ff5f4277a2cca129d0",
   "word/styles.xml": "08c8ca692ed08c06b65cb25f6ba342def16c9ae859c108a03a438357ee1bfe56",
-  "word/theme/theme1.xml": "cecdf4f21275f87c79187622b39191d29095638711bd3fe1b92624c6d5c8c070"
+  "word/theme/theme1.xml": "cecdf4f21275f87c79187622b39191d29095638711bd3fe1b92624c6d5c8c070",
+  "word/webSettings.xml": "6ac88389354c9c5271f37025577143e071f9d24702d9b4bf48c115a3e445557d"
  }
 }
