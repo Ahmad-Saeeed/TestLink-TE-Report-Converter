@@ -17,8 +17,10 @@ a = Analysis(
     binaries=[],
     # the docx skeleton (header/footer/logos/styles) read via resource_path()
     datas=[('resources', 'resources')],
-    # bs4 picks its parser backend dynamically; soupsieve is its selector engine
-    hiddenimports=['bs4', 'soupsieve'],
+    # bs4 picks its parser backend dynamically; soupsieve is its selector engine.
+    # win32com / pythoncom are used (when available) to let Microsoft Word
+    # re-save the generated .docx so strict upload systems accept it.
+    hiddenimports=['bs4', 'soupsieve', 'win32com', 'win32com.client', 'pythoncom', 'pywintypes'],
     hookspath=[],
     runtime_hooks=[],
     noarchive=False,

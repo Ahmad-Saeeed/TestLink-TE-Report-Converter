@@ -101,6 +101,58 @@ def _verify_docx(path):
     return problems
 
 
+def _normalize_with_word(path, log=_noop):
+    """Ask Microsoft Word to open and re-save the .docx so the package becomes
+    a native Word file. Many enterprise upload systems only accept packages
+    that Word itself has written.
+
+    Returns True if Word successfully rewrote the file, False if Word is not
+    available or the step failed (the original file is left unchanged).
+    """
+    try:
+        import win32com.client  # type: ignore
+        import pythoncom
+    except ImportError:
+        log("Microsoft Word automation not available (pywin32 missing). Skipping native re-save.")
+        return False
+
+    word = None
+    doc = None
+    try:
+        pythoncom.CoInitialize()
+        word = win32com.client.DispatchEx("Word.Application")
+        word.Visible = False
+        word.DisplayAlerts = 0  # wdAlertsNone
+
+        abs_path = os.path.abspath(path)
+        # Open and immediately SaveAs as .docx (FileFormat 16 = wdFormatXMLDocument).
+        # This forces Word to rewrite the entire OOXML package in its native layout.
+        doc = word.Documents.Open(abs_path, ReadOnly=False, AddToRecentFiles=False)
+        doc.SaveAs2(abs_path, FileFormat=16)
+        doc.Close(SaveChanges=False)
+        doc = None
+        log("Re-saved with Microsoft Word so the file is accepted by strict upload systems.")
+        return True
+    except Exception as e:
+        log(f"Could not re-save with Microsoft Word ({e}). The generated file is still usable in Word.")
+        return False
+    finally:
+        try:
+            if doc is not None:
+                doc.Close(SaveChanges=False)
+        except Exception:
+            pass
+        try:
+            if word is not None:
+                word.Quit()
+        except Exception:
+            pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
+
+
 def run_conversion(source_path, output_dir=None, log=_noop):
     """Convert one TestLink export. Returns the full path of the .docx created.
 
@@ -155,6 +207,11 @@ def run_conversion(source_path, output_dir=None, log=_noop):
             + "\n- ".join(problems[:6])
             + "\n\nPlease send this message to whoever maintains this tool."
         )
+
+    # Final step: if Microsoft Word is installed, let it rewrite the package.
+    # This is what makes the file pass strict enterprise upload validators.
+    log("Normalizing the package with Microsoft Word (if available) ...")
+    _normalize_with_word(out_path, log=log)
 
     log(f"Done. Saved to {out_path}")
     return out_path
