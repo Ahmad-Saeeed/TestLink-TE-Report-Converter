@@ -439,8 +439,10 @@ def build_body(data):
 
     body = "".join(parts) + sect_pr
 
+    # Use LF only (no \r\n) so the whole package has consistent line endings.
+    # Mixed CRLF/LF can cause some strict OOXML validators to reject the file.
     document_xml = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
         '<w:document xmlns:o="urn:schemas-microsoft-com:office:office" '
         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
         'xmlns:v="urn:schemas-microsoft-com:vml" '
@@ -505,16 +507,60 @@ def build_docx_from_data(data, output_path, skeleton_dir=None):
         _stamp_core_xml(pkg_dir)
 
         tmp_docx = os.path.join(work_dir, "out.docx")
-        with zipfile.ZipFile(tmp_docx, "w", zipfile.ZIP_DEFLATED) as zf:
-            # [Content_Types].xml first, as Word expects.
-            zf.write(docx_ct, "[Content_Types].xml")
-            for root, _, files in os.walk(pkg_dir):
-                for name in sorted(files):
-                    full = os.path.join(root, name)
-                    rel = os.path.relpath(full, pkg_dir).replace(os.sep, "/")
-                    if rel == "[Content_Types].xml":
-                        continue
-                    zf.write(full, rel)   # ZIP entry names always use '/'
+        # Preferred order of parts (matches what Microsoft Word typically writes).
+        # [Content_Types].xml must come first; after that the order is less critical
+        # but some strict validators are happier with a Word-like sequence.
+        preferred_order = [
+            "[Content_Types].xml",
+            "_rels/.rels",
+            "docProps/core.xml",
+            "docProps/app.xml",
+            "docProps/custom.xml",
+            "word/document.xml",
+            "word/_rels/document.xml.rels",
+            "word/styles.xml",
+            "word/settings.xml",
+            "word/fontTable.xml",
+            "word/numbering.xml",
+            "word/header1.xml",
+            "word/footer1.xml",
+            "word/_rels/header1.xml.rels",
+            "word/_rels/footer1.xml.rels",
+            "word/theme/theme1.xml",
+            "word/media/image1.png",
+            "word/media/image2.png",
+        ]
+
+        # Collect every file under pkg_dir.
+        all_parts = {}
+        for root, _, files in os.walk(pkg_dir):
+            for name in files:
+                full = os.path.join(root, name)
+                rel = os.path.relpath(full, pkg_dir).replace(os.sep, "/")
+                all_parts[rel] = full
+
+        with zipfile.ZipFile(tmp_docx, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            written = set()
+            for rel in preferred_order:
+                if rel in all_parts:
+                    # Force create_system=0 (MS-DOS/FAT) like real Word files.
+                    # Python's default is 3 (Unix) which a few strict checkers dislike.
+                    info = zipfile.ZipInfo(rel)
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    info.create_system = 0          # 0 = MS-DOS
+                    info.external_attr = 0o600 << 16  # reasonable file mode
+                    with open(all_parts[rel], "rb") as f:
+                        zf.writestr(info, f.read())
+                    written.add(rel)
+            # Any remaining parts (future-proof) go at the end.
+            for rel in sorted(all_parts):
+                if rel not in written:
+                    info = zipfile.ZipInfo(rel)
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    info.create_system = 0
+                    info.external_attr = 0o600 << 16
+                    with open(all_parts[rel], "rb") as f:
+                        zf.writestr(info, f.read())
 
         if os.path.exists(output_path):
             os.remove(output_path)  # PermissionError here => file open in Word
