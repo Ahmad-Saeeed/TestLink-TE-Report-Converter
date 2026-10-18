@@ -1,0 +1,50 @@
+name: Build Windows EXE (stock launcher)
+
+# Fallback / comparison build. "Build Windows EXE" (the other workflow) is the one to
+# use normally - it compiles PyInstaller's launcher from source, which scans much
+# cleaner on antivirus services. This workflow uses the stock launcher that ships
+# with the pip package instead. Run it only if the from-source compile step in the
+# normal workflow ever fails, or if you want to compare the two builds on VirusTotal.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Locate the project folder
+        id: loc
+        shell: bash
+        run: |
+          SPEC=$(find . -name app.spec -not -path "./.git/*" | head -n 1)
+          if [ -z "$SPEC" ]; then
+            echo "::error::app.spec was not found in this repository."
+            exit 1
+          fi
+          DIR=$(dirname "$SPEC")
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build EXE with PyInstaller
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: pyinstaller app.spec --noconfirm
+
+      - name: Upload built app
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestLinkWEFormatter-Windows-stock-launcher
+          path: ${{ steps.loc.outputs.dir }}/dist/TestLinkWEFormatter/
